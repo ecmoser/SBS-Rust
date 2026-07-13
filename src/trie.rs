@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 #[derive(Default, Debug)]
-struct TrieNode {
-    is_end_of_word: bool,
-    children: HashMap<char, TrieNode>
+pub struct TrieNode {
+    pub is_end_of_word: bool,
+    pub children: HashMap<char, TrieNode>
 }
 
 #[derive(Default, Debug)]
 pub struct Trie {
-    root: TrieNode
+    pub root: TrieNode
 }
 
 impl Trie {

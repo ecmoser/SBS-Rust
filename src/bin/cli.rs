@@ -1,4 +1,4 @@
-use sbs_rust::trie::Trie;
+use sbs_rust::trie::{Trie, TrieNode};
 use serde::Serialize;
 use std::error::Error;
 use std::io::{self, Read, Write};
@@ -16,6 +16,7 @@ fn get_used_words() -> Result<Trie, Box<dyn Error>> {
     let url = "https://ultrabee.org/list/word-first-desc-full.html";
 
     let words_entries = scrape_words(url)?;
+    println!("{}", words_entries.len());
     for entry in words_entries {
         used_trie.insert(entry.word.to_lowercase().as_ref());
     }
@@ -66,6 +67,26 @@ fn scrape_words(url: &str) -> Result<Vec<WordEntry>, Box<dyn Error>> {
     Ok(entries)
 }
 
+fn get_words_from_node(node: &TrieNode, letters: &Vec<char>, prefix: &str) -> Vec<String> {
+    let mut words: Vec<String> = Vec::new();
+
+    if node.is_end_of_word {
+        words.push(prefix.to_string());
+    }
+    for letter in letters {
+        let new_prefix = format!("{}{}", prefix, letter);
+        match node.children.get(&letter) {
+            Some(new_node) => {
+                words.extend(get_words_from_node(new_node, letters, new_prefix.as_ref()))
+            }
+            None => continue,
+        }
+    }
+
+    words.sort();
+    words
+}
+
 fn solve_puzzle(
     puzzle: &String,
     used_words: &Trie,
@@ -75,17 +96,54 @@ fn solve_puzzle(
     let mut all_matches: Vec<String> = Vec::new();
     let mut pangrams: Vec<String> = Vec::new();
 
-    let mut letters: Vec<String> = Vec::new();
-    let mut center_letter: String;
+    let mut letters: Vec<char> = Vec::new();
+    let mut center_letter: String = "".to_string();
 
     for char in puzzle.chars() {
-        letters.push(char.to_string().to_lowercase());
+        letters.push(char.to_ascii_lowercase());
         if char.is_uppercase() {
             center_letter = char.to_string().to_lowercase();
         }
     }
 
-    //continue here please
+    let all_used_words = get_words_from_node(&used_words.root, &letters, "");
+    for word in all_used_words {
+        if word.contains(&center_letter) {
+            let mut all_letters = true;
+            for letter in letters.iter() {
+                if !word.contains(&letter.to_string()) {
+                    all_letters = false;
+                    continue;
+                }
+            }
+            if all_letters {
+                pangrams.push(word.clone());
+            } else {
+                used_matches.push(word.clone());
+            }
+        }
+    }
+
+    for word in get_words_from_node(&all_words.root, &letters, "") {
+        if word.contains(&center_letter) {
+            let mut all_letters = true;
+            for letter in letters.iter() {
+                if !word.contains(&letter.to_string()) {
+                    all_letters = false;
+                    continue;
+                }
+            }
+            if all_letters {
+                if !pangrams.contains(&word) {
+                    pangrams.push(word.clone());
+                }
+            } else {
+                if !used_matches.contains(&word) {
+                    all_matches.push(word.clone());
+                }
+            }
+        }
+    }
 
     (used_matches, all_matches, pangrams)
 }
@@ -118,6 +176,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut trimmed_input = input.trim().to_lowercase();
 
         while trimmed_input != "s".to_string() && trimmed_input != "q".to_string() {
+            input = "".to_string();
             print!("Please enter 's' to solve or 'q' to quit: ");
             io::stdout().flush().expect("failed to flush stdout");
 
@@ -145,6 +204,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             while puzzle.len() != 7 || caps != 1 {
+                puzzle = "".to_string();
                 print!("Please enter a 7-letter puzzle in the format of abcDefg: ");
                 io::stdout().flush().expect("failed to flush stdout");
                 io::stdin()
