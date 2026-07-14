@@ -2,6 +2,7 @@ use sbs_rust::trie::{Trie, TrieNode};
 use serde::Serialize;
 use std::error::Error;
 use std::io::{self, Read, Write};
+use reqwest::blocking::get;
 
 #[derive(Debug, Serialize)]
 struct WordEntry {
@@ -16,7 +17,6 @@ fn get_used_words() -> Result<Trie, Box<dyn Error>> {
     let url = "https://ultrabee.org/list/word-first-desc-full.html";
 
     let words_entries = scrape_words(url)?;
-    println!("{}", words_entries.len());
     for entry in words_entries {
         used_trie.insert(entry.word.to_lowercase().as_ref());
     }
@@ -25,7 +25,17 @@ fn get_used_words() -> Result<Trie, Box<dyn Error>> {
 }
 
 fn get_all_words() -> Result<Trie, Box<dyn Error>> {
-    Ok(Trie::new())
+    let mut all_trie = Trie::new();
+    let url = "https://gist.githubusercontent.com/deostroll/7693b6f3d48b44a89ee5f57bf750bd32/raw/426f564cf73b4c87d2b2c46ccded8a5b98658ce1/dictionary.txt";
+    
+    let body = get(url)?.text()?;
+    let words: Vec<String> = body.lines().map(|line| line.trim().to_string()).filter(|line| !line.is_empty()).collect();
+
+    for word in words {
+        all_trie.insert(word.to_lowercase().as_ref());
+    }
+    
+    Ok(all_trie)
 }
 
 fn scrape_words(url: &str) -> Result<Vec<WordEntry>, Box<dyn Error>> {
