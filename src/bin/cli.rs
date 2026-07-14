@@ -1,8 +1,10 @@
 use sbs_rust::trie::{Trie, TrieNode};
 use serde::Serialize;
+use std::cmp::max;
 use std::error::Error;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use reqwest::blocking::get;
+use itertools::{EitherOrBoth, Itertools};
 
 #[derive(Debug, Serialize)]
 struct WordEntry {
@@ -29,7 +31,7 @@ fn get_all_words() -> Result<Trie, Box<dyn Error>> {
     let url = "https://gist.githubusercontent.com/deostroll/7693b6f3d48b44a89ee5f57bf750bd32/raw/426f564cf73b4c87d2b2c46ccded8a5b98658ce1/dictionary.txt";
     
     let body = get(url)?.text()?;
-    let words: Vec<String> = body.lines().map(|line| line.trim().to_string()).filter(|line| !line.is_empty()).collect();
+    let words: Vec<String> = body.lines().map(|line| line.trim().to_string()).filter(|line| line.len() > 3).collect();
 
     for word in words {
         all_trie.insert(word.to_lowercase().as_ref());
@@ -163,10 +165,84 @@ fn print_results(
     all_word_matches: Vec<String>,
     pangram_matches: Vec<String>,
 ) {
-    println!(
-        "{:?} {:?} {:?}",
-        used_word_matches, all_word_matches, pangram_matches
-    );
+    let num_used = used_word_matches.len();
+    let num_pangram = pangram_matches.len();
+    let num_all = all_word_matches.len();
+    
+    let mut longest_used_len = 0;
+    let mut longest_pangram_len = 0;
+    let mut longest_all_len = 0;
+
+    for word in used_word_matches.iter() {
+        if word.len() > longest_used_len {
+            longest_used_len = word.len();
+        }
+    }
+    for word in pangram_matches.iter() {
+        if word.len() > longest_pangram_len {
+            longest_pangram_len = word.len();
+        }
+    }
+    for word in all_word_matches.iter() {
+        if word.len() > longest_all_len {
+            longest_all_len = word.len();
+        }
+    }
+
+    let longest_title = "Previously Used".to_string().len();
+    let longest_word_len = max(max(longest_used_len, longest_pangram_len), longest_all_len);
+    let space_size = max(longest_title, longest_word_len) + 1;
+
+    let mut result = format!("\nTotal Words: {}\n", num_all + num_pangram + num_used);
+    result += format!("Previously Used Words: {}\n", num_used + num_pangram).as_ref();
+    result += "\n";
+    result += "Previously Used";
+    result += &" ".repeat(space_size - "Previously Used".len());
+    result += "|Pangrams";
+    result += &" ".repeat(space_size - "Pangrams".len());
+    result += "|All Words";
+    result += &" ".repeat(space_size - "All Words".len());
+    result += "\n";
+    result += &"-".repeat(space_size * 3 + 3);
+    result += "\n";
+
+    let zipped = used_word_matches.iter()
+                    .zip_longest(&pangram_matches)
+                    .zip_longest(&all_word_matches);
+
+    for item in zipped {
+        let (used, pangram, all): (String, String, String) = match item {
+            EitherOrBoth::Both(inner, all) => {
+                match inner {
+                    EitherOrBoth::Both(used, pangram) => (used.to_string(), pangram.to_string(), all.to_string()),
+                    EitherOrBoth::Left(used) => (used.to_string(), "".to_string(), all.to_string()),
+                    EitherOrBoth::Right(pangram) => ("".to_string(), pangram.to_string(), all.to_string())
+                }
+            }
+            EitherOrBoth::Left(inner) => {
+                match inner {
+                    EitherOrBoth::Both(used, pangram) => (used.to_string(), pangram.to_string(), "".to_string()),
+                    EitherOrBoth::Left(used) => (used.to_string(), "".to_string(), "".to_string()),
+                    EitherOrBoth::Right(pangram) => ("".to_string(), pangram.to_string(), "".to_string())
+                }
+            }
+            EitherOrBoth::Right(all) => {
+                ("".to_string(), "".to_string(), all.to_string())
+            }
+        };
+
+        result += used.as_ref();
+        result += &" ".repeat(space_size - used.len());
+        result += "|";
+        result += pangram.as_ref();
+        result += &" ".repeat(space_size - pangram.len());
+        result += "|";
+        result += all.as_ref();
+        result += &" ".repeat(space_size - all.len());
+        result += "\n";
+    }
+
+    println!("{}", result);
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -174,7 +250,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let all_trie = get_all_words()?;
 
     //let all: get_all_words();
-    while true {
+    loop {
         print!("What would you like to do? Solve(s)/Quit(q) ");
         io::stdout().flush().expect("Failed to flush stdout");
 
@@ -244,6 +320,4 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
     }
-
-    Ok(())
 }
